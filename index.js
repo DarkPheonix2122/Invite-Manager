@@ -39,19 +39,18 @@ client.on('ready', async () => {
   + `> Users: ${client.users.cache.size}\n`
   + `> Channels: ${client.channels.cache.size}\n`
   + `> Servers: ${client.guilds.cache.size}`));
-  client.guilds.cache.forEach(guild => {
-    guild.fetchInvites()
-    .then(invites => guildInvites.set(guild.id, invites))
-    .catch(err => console.log(err));
-    });
-    let botstatus = fs.readFileSync('./bot-status.json');
-    botstatus = JSON.parse(botstatus);
-    if(botstatus.enabled.toLowerCase() == 'false') return;
-    if(botstatus.activity_type.toUpperCase() == 'STREAMING') {
-      client.user.setPresence({ activity: { name: botstatus.activity_text, type: botstatus.activity_type.toUpperCase()}, status: botstatus.status.toLowerCase() }).catch(console.error);
-    } else {
-      client.user.setPresence({ activity: { name: botstatus.activity_text, type: botstatus.activity_type.toUpperCase()}, status: botstatus.status.toLowerCase() }).catch(console.error);
-    }
+  client.guilds.cache.forEach(async guild => {
+    const invites = await guild.fetchInvites()
+    guildInvites.set(guild.id, invites)
+  });
+  let botstatus = fs.readFileSync('./bot-status.json');
+  botstatus = JSON.parse(botstatus);
+  if(botstatus.enabled.toLowerCase() == 'false') return;
+  if(botstatus.activity_type.toUpperCase() == 'STREAMING') {
+    client.user.setPresence({ activity: { name: botstatus.activity_text, type: botstatus.activity_type.toUpperCase()}, status: botstatus.status.toLowerCase() }).catch(console.error);
+  } else {
+    client.user.setPresence({ activity: { name: botstatus.activity_text, type: botstatus.activity_type.toUpperCase()}, status: botstatus.status.toLowerCase() }).catch(console.error);
+  }
 });
 
 client.on('inviteCreate', async invite => {
@@ -60,18 +59,18 @@ client.on('inviteCreate', async invite => {
 
 client.on('guildMemberAdd', async member => {
   if(process.env.welcomeChannel != "false") {
-    const welcomeChannel = client.channels.fetch(process.env.welcomeChannel)
+    const welcomeChannel = await client.channels.fetch(process.env.welcomeChannel)
     if(member.user.bot) return welcomeChannel.send(`<@${member.id}> joined the server using OAuth flow.`)
   }
   const db = require('./db.js')
-  const cachedInvites = guildInvites.get(member.guild.id);
+  const cachedInvites = await guildInvites.get(member.guild.id);
   const newInvites = await member.guild.fetchInvites();
   guildInvites.set(member.guild.id, newInvites);
   try {
-    const usedInvite = newInvites.find(inv => cachedInvites.get(inv.code).uses < inv.uses);
+    const usedInvite = await newInvites.find(inv => cachedInvites.get(inv.code).uses < inv.uses);
     const currentInvites = await db.get(`${usedInvite.inviter.id}`)
     if(currentInvites) {
-      const newamount = currentInvites-0 + 1-0
+      const newamount = +currentInvites + +1
       const welcomeChannel = await client.channels.fetch(process.env.welcomeChannel)
       if(welcomeChannel) {
         welcomeChannel.send(`<@${member.id}> joined the server. They were invited by **${usedInvite.inviter.tag}** (who has ${newamount} invites).`).catch(err => console.log(err));
@@ -103,7 +102,7 @@ client.on('guildMemberRemove', async member => {
   const currentInvites = await db.get(`${inviter}`)
   try {
     const welcomeChannel = await client.channels.fetch(process.env.welcomeChannel)
-    const newamount = currentInvites-0 - 1-0
+    const newamount = +currentInvites - +1
     if(welcomeChannel) {
       welcomeChannel.send(`${member.user.tag} left the server. They were invited by **${userinviter.user.tag}** (who has ${newamount} invites).`).catch(err => console.log(err));
     }
